@@ -1,0 +1,31 @@
+# 토지전문 AI 시스템 - Python Dependencies
+
+# 웹 프레임워크
+streamlit>=1.28.0
+
+# 데이터 분석
+pandas>=2.0.0
+numpy>=1.24.0
+
+# AI/ML
+anthropic>=0.7.0  # Claude API (실제 운영 시 필요)
+
+# 데이터 시각화
+plotly>=5.17.0
+matplotlib>=3.7.0
+
+# 유틸리티
+python-dateutil>=2.8.2
+pytz
+
+# PDF 생성 (추후 리포트 생성용)
+reportlab>=4.0.0
+
+# 엑셀 처리
+openpyxl>=3.1.0
+
+# HTTP 요청 (공공 API 호출용)
+requests>=2.31.0
+
+# 환경 변수 관리
+python-dotenv>=1.0.0
