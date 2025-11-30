@@ -15,11 +15,13 @@ from typing import Dict, List, Optional
 from auth_system import AuthManager, login_form, register_form, show_user_info, require_auth
 from database_manager import DatabaseManager
 from api_integrations import PublicAPIManager, MarketDataAnalyzer, GeocodeService
-from ai_models import ClaudeAIManager, LandPricePredictor
+from ai_models_gemini import UnifiedAIManager as AIManager, LandPricePredictor
 from advanced_analytics import MarketAnalyzer, ReportGenerator
 from security_manager import SecurityManager, ErrorHandler, secure_endpoint, validate_and_sanitize
 from land_ai_core import LandInfo, LandAnalyzer, LandMatcher
 from land_ai_chatbot import LandConsultingBot, SmartDocumentAnalyzer
+from ai_models_gemini import UnifiedAIManager
+from file_upload_handler import FileUploadHandler
 
 # 페이지 설정
 st.set_page_config(
@@ -37,7 +39,7 @@ def init_managers():
         'auth': AuthManager(),
         'db': DatabaseManager(),
         'api': PublicAPIManager(),
-        'ai': ClaudeAIManager(),
+        'ai': AIManager(prefer_gemini=True),
         'security': SecurityManager(),
         'error_handler': ErrorHandler(),
         'market_analyzer': MarketAnalyzer(),
@@ -274,13 +276,24 @@ def show_land_analysis():
     user = st.session_state.user
     
     # API 사용량 확인
-    if not managers['security'].check_api_limit(user.user_id):
+    if not managers['auth'].check_api_limit(user.user_id):
         st.error("월간 API 사용량을 초과했습니다. 다음 달에 다시 이용해주세요.")
         return
     
-    st.markdown("토지 정보를 입력하면 AI가 종합적으로 분석해드립니다.")
+    st.markdown("토지 정보를 입력하거나 파일로 업로드하여 AI가 종합적으로 분석해드립니다.")
     
-    # 입력 폼
+    # 입력 방식 선택
+    input_method = st.radio(
+        "입력 방식 선택",
+        ["📝 직접 입력", "📤 파일 업로드"],
+        horizontal=True
+    )
+    
+    if input_method == "📤 파일 업로드":
+        show_file_upload_section()
+        return
+    
+    # 직접 입력 폼
     with st.form("land_analysis_form"):
         st.markdown("### 📝 토지 기본 정보 입력")
         
@@ -374,7 +387,7 @@ def show_land_analysis():
                 )
                 
                 # API 사용량 증가
-                managers['security'].increment_api_usage(user.user_id)
+                managers['auth'].increment_api_usage(user.user_id)
                 
                 # 보안 이벤트 로깅
                 managers['security'].log_security_event(
@@ -696,7 +709,7 @@ def show_ai_consultation():
     
     if user_input:
         # API 사용량 확인
-        if not managers['security'].check_api_limit(user.user_id):
+        if not managers['auth'].check_api_limit(user.user_id):
             st.error("월간 API 사용량을 초과했습니다.")
             return
         
@@ -736,7 +749,7 @@ def show_ai_consultation():
                     })
                     
                     # API 사용량 증가
-                    managers['security'].increment_api_usage(user.user_id)
+                    managers['auth'].increment_api_usage(user.user_id)
                     
                 except Exception as e:
                     error_info = managers['error_handler'].handle_error(
@@ -763,6 +776,211 @@ def show_ai_consultation():
         if st.sidebar.button(question, key=f"sample_{question}"):
             st.session_state.sample_question = question
             st.rerun()
+
+def show_file_upload_section():
+    """파일 업로드 섹션"""
+    st.markdown("### 📤 파일로 토지 정보 업로드")
+    
+    user = st.session_state.user
+    file_handler = FileUploadHandler()
+    
+    # 템플릿 다운로드
+    st.markdown("#### 📋 템플릿 다운로드")
+    st.info("먼저 템플릿을 다운로드하여 토지 정보를 입력한 후 업로드하세요.")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        excel_template = file_handler.create_template_excel()
+        st.download_button(
+            label="📊 Excel 템플릿",
+            data=excel_template,
+            file_name="토지정보_템플릿.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    
+    with col2:
+        csv_template = file_handler.create_template_csv()
+        st.download_button(
+            label="📄 CSV 템플릿",
+            data=csv_template,
+            file_name="토지정보_템플릿.csv",
+            mime="text/csv"
+        )
+    
+    with col3:
+        json_template = file_handler.create_template_json()
+        st.download_button(
+            label="📋 JSON 템플릿",
+            data=json_template,
+            file_name="토지정보_템플릿.json",
+            mime="application/json"
+        )
+    
+    st.markdown("---")
+    
+    # 파일 업로드
+    st.markdown("#### 📁 파일 업로드")
+    
+    uploaded_file = st.file_uploader(
+        "토지 정보 파일을 업로드하세요",
+        type=['xlsx', 'xls', 'csv', 'json'],
+        help="Excel, CSV, JSON 파일을 지원합니다."
+    )
+    
+    if uploaded_file is not None:
+        try:
+            # 파일 타입에 따라 파싱
+            file_extension = uploaded_file.name.split('.')[-1].lower()
+            
+            with st.spinner("파일을 읽고 있습니다..."):
+                if file_extension in ['xlsx', 'xls']:
+                    land_data_list = file_handler.parse_excel(uploaded_file.read())
+                elif file_extension == 'csv':
+                    land_data_list = file_handler.parse_csv(uploaded_file.read())
+                elif file_extension == 'json':
+                    land_data_list = file_handler.parse_json(uploaded_file.read())
+                else:
+                    st.error("지원하지 않는 파일 형식입니다.")
+                    return
+            
+            st.success(f"✅ {len(land_data_list)}개의 토지 정보를 읽었습니다!")
+            
+            # 데이터 미리보기
+            st.markdown("#### 📊 업로드된 데이터 미리보기")
+            
+            preview_data = []
+            for idx, land in enumerate(land_data_list[:5], 1):  # 최대 5개만 표시
+                preview_data.append({
+                    '번호': idx,
+                    '주소': land.address[:30] + '...' if len(land.address) > 30 else land.address,
+                    '지목': land.land_category,
+                    '면적(㎡)': f"{land.area:,.0f}",
+                    '공시지가(원/㎡)': f"{land.official_price:,.0f}",
+                    '용도지역': land.zone_type
+                })
+            
+            st.dataframe(preview_data, use_container_width=True)
+            
+            if len(land_data_list) > 5:
+                st.info(f"외 {len(land_data_list) - 5}개 더 있습니다.")
+            
+            # 분석 시작 버튼
+            st.markdown("---")
+            
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                analyze_all = st.checkbox("모든 토지 일괄 분석", value=False)
+                if analyze_all:
+                    st.warning(f"⚠️ {len(land_data_list)}개의 토지를 분석합니다. API 사용량이 증가할 수 있습니다.")
+            
+            with col2:
+                if st.button("🔍 분석 시작", use_container_width=True, type="primary"):
+                    analyze_uploaded_lands(land_data_list, analyze_all)
+        
+        except Exception as e:
+            st.error(f"파일 처리 중 오류가 발생했습니다: {str(e)}")
+            st.info("템플릿 형식에 맞게 파일을 작성했는지 확인해주세요.")
+
+
+def analyze_uploaded_lands(land_data_list: list, analyze_all: bool = False):
+    """업로드된 토지 분석"""
+    user = st.session_state.user
+    file_handler = FileUploadHandler()
+    
+    # 분석할 토지 선택
+    lands_to_analyze = land_data_list if analyze_all else [land_data_list[0]]
+    
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    results = []
+    
+    for idx, land_data in enumerate(lands_to_analyze):
+        # 진행률 업데이트
+        progress = (idx + 1) / len(lands_to_analyze)
+        progress_bar.progress(progress)
+        status_text.text(f"분석 중... ({idx + 1}/{len(lands_to_analyze)})")
+        
+        try:
+            # 데이터 유효성 검증
+            is_valid, error_msg = file_handler.validate_land_data(land_data)
+            if not is_valid:
+                st.warning(f"⚠️ {land_data.address}: {error_msg}")
+                continue
+            
+            # 토지 정보 생성
+            land = LandInfo(**land_data.to_dict())
+            
+            # 분석 수행
+            analyzer = LandAnalyzer(land)
+            report = analyzer.generate_comprehensive_report()
+            
+            # AI 분석 (선택적)
+            if user.user_type in ['premium', 'admin']:
+                ai_analysis = managers['ai'].analyze_land_with_ai(land_data.to_dict())
+                report['ai_analysis'] = ai_analysis
+            
+            # 가격 예측
+            price_prediction = managers['price_predictor'].predict_price(land_data.to_dict())
+            report['price_prediction'] = {
+                'predicted_price': price_prediction.predicted_price,
+                'confidence_score': price_prediction.confidence_score,
+                'price_range_min': price_prediction.price_range_min,
+                'price_range_max': price_prediction.price_range_max,
+                'factors': price_prediction.factors
+            }
+            
+            # 데이터베이스 저장
+            record_id = managers['db'].save_land_analysis(
+                user.user_id, land_data.to_dict(), report
+            )
+            
+            results.append({
+                'land_data': land_data,
+                'report': report,
+                'record_id': record_id
+            })
+            
+            # API 사용량 증가
+            managers['auth'].increment_api_usage(user.user_id)
+            
+        except Exception as e:
+            st.error(f"❌ {land_data.address}: 분석 실패 - {str(e)}")
+            continue
+    
+    progress_bar.empty()
+    status_text.empty()
+    
+    if results:
+        st.success(f"✅ {len(results)}개 토지 분석 완료!")
+        
+        # 첫 번째 결과 표시
+        if results:
+            st.session_state.current_analysis = results[0]['report']
+            st.markdown("---")
+            st.markdown("## 📊 분석 결과 (첫 번째 토지)")
+            show_analysis_results(results[0]['report'])
+        
+        # 전체 결과 다운로드
+        if len(results) > 1:
+            st.markdown("---")
+            st.markdown("### 📥 전체 결과 다운로드")
+            
+            all_results_json = json.dumps(
+                [r['report'] for r in results],
+                ensure_ascii=False,
+                indent=2
+            )
+            
+            st.download_button(
+                label=f"📄 전체 {len(results)}개 결과 다운로드 (JSON)",
+                data=all_results_json,
+                file_name=f"토지분석결과_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json"
+            )
+
 
 def show_usage_history():
     """사용 이력 페이지"""

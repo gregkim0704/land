@@ -1,6 +1,6 @@
 """
-AI 모델 통합 시스템 - Gemini & Claude 지원
-AI Models Integration System with Gemini & Claude Support
+AI 모델 통합 시스템
+AI Models Integration System
 """
 
 import os
@@ -18,6 +18,12 @@ try:
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ANTHROPIC_AVAILABLE = False
+
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
 
 try:
     import google.generativeai as genai
@@ -47,29 +53,16 @@ class PredictionResult:
     model_version: str
 
 
-class UnifiedAIManager:
-    """통합 AI 관리자 (Gemini & Claude)"""
+class HybridAIManager:
+    """하이브리드 AI 관리자 (Claude + Gemini)"""
     
     def __init__(self, prefer_gemini: bool = True):
         """
         Args:
-            prefer_gemini: True면 기본적으로 Gemini 사용 (비용 효율적)
+            prefer_gemini: True면 기본적으로 Gemini 사용 (비용 절감)
         """
         self.prefer_gemini = prefer_gemini
         self.setup_logging()
-        
-        # Gemini 초기화
-        self.gemini_model = None
-        self.gemini_available = False
-        gemini_key = os.getenv('GEMINI_API_KEY')
-        if gemini_key and GEMINI_AVAILABLE:
-            try:
-                genai.configure(api_key=gemini_key)
-                self.gemini_model = genai.GenerativeModel('gemini-pro')
-                self.gemini_available = True
-                self.logger.info("✅ Gemini AI initialized successfully")
-            except Exception as e:
-                self.logger.error(f"❌ Failed to initialize Gemini AI: {e}")
         
         # Claude 초기화
         self.claude_client = None
@@ -79,83 +72,56 @@ class UnifiedAIManager:
             try:
                 self.claude_client = anthropic.Anthropic(api_key=claude_key)
                 self.claude_available = True
-                self.logger.info("✅ Claude AI initialized successfully")
+                self.logger.info("Claude AI initialized successfully")
             except Exception as e:
-                self.logger.error(f"❌ Failed to initialize Claude AI: {e}")
+                self.logger.error(f"Failed to initialize Claude AI: {e}")
         
-        # 사용 가능한 AI 확인
-        if not self.gemini_available and not self.claude_available:
-            self.logger.warning("⚠️ No AI service available - using mock responses")
+        # Gemini 초기화
+        self.gemini_available = False
+        gemini_key = os.getenv('GEMINI_API_KEY')
+        if gemini_key and GEMINI_AVAILABLE:
+            try:
+                genai.configure(api_key=gemini_key)
+                self.gemini_model = genai.GenerativeModel('gemini-pro')
+                self.gemini_available = True
+                self.logger.info("Gemini AI initialized successfully")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize Gemini AI: {e}")
         
-        # 활성 프로바이더 결정
-        if prefer_gemini and self.gemini_available:
-            self.active_provider = "gemini"
-        elif self.claude_available:
-            self.active_provider = "claude"
-        elif self.gemini_available:
-            self.active_provider = "gemini"
-        else:
-            self.active_provider = "mock"
-        
-        self.logger.info(f"🎯 Active AI Provider: {self.active_provider.upper()}")
+        if not self.claude_available and not self.gemini_available:
+            self.logger.warning("No AI service available - using mock responses")
     
     def setup_logging(self):
         """로깅 설정"""
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
     
-    def analyze_land_with_ai(self, land_data: Dict, market_data: Dict = None, 
-                            use_premium: bool = False) -> Dict:
-        """
-        AI를 활용한 토지 분석
+    def analyze_land_with_ai(self, land_data: Dict, market_data: Dict = None) -> Dict:
+        """AI를 활용한 토지 분석"""
+        if not self.client:
+            return self._get_mock_ai_analysis(land_data)
         
-        Args:
-            land_data: 토지 정보
-            market_data: 시장 데이터
-            use_premium: True면 Claude 사용 (더 정확), False면 Gemini 우선
-        """
         prompt = self._create_analysis_prompt(land_data, market_data)
         
-        # 프리미엄 요청이고 Claude가 사용 가능하면 Claude 사용
-        if use_premium and self.claude_available:
-            return self._analyze_with_claude(prompt, land_data)
-        
-        # 기본적으로 Gemini 사용 (비용 효율적)
-        if self.gemini_available:
-            return self._analyze_with_gemini(prompt, land_data)
-        
-        # Gemini가 없으면 Claude 사용
-        if self.claude_available:
-            return self._analyze_with_claude(prompt, land_data)
-        
-        # 둘 다 없으면 모의 응답
-        return self._get_mock_ai_analysis(land_data)
-    
-    def _analyze_with_gemini(self, prompt: str, land_data: Dict) -> Dict:
-        """Gemini로 분석"""
         try:
-            response = self.gemini_model.generate_content(prompt)
-            ai_response = response.text
-            self.logger.info("✅ Gemini analysis completed")
-            return self._parse_ai_response(ai_response)
-        except Exception as e:
-            self.logger.error(f"❌ Gemini analysis failed: {e}")
-            return self._get_mock_ai_analysis(land_data)
-    
-    def _analyze_with_claude(self, prompt: str, land_data: Dict) -> Dict:
-        """Claude로 분석"""
-        try:
-            response = self.claude_client.messages.create(
+            response = self.client.messages.create(
                 model="claude-3-sonnet-20240229",
                 max_tokens=2000,
                 temperature=0.3,
-                messages=[{"role": "user", "content": prompt}]
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
             )
+            
+            # AI 응답 파싱
             ai_response = response.content[0].text
-            self.logger.info("✅ Claude analysis completed")
             return self._parse_ai_response(ai_response)
+            
         except Exception as e:
-            self.logger.error(f"❌ Claude analysis failed: {e}")
+            self.logger.error(f"Claude AI analysis failed: {e}")
             return self._get_mock_ai_analysis(land_data)
     
     def chat_consultation(self, user_message: str, context: Dict = None, 
@@ -166,7 +132,7 @@ class UnifiedAIManager:
         Args:
             user_message: 사용자 질문
             context: 추가 컨텍스트
-            use_premium: True면 Claude 사용, False면 Gemini 우선
+            use_premium: True면 Claude 사용 (전문 상담), False면 Gemini 우선
         """
         system_prompt = """당신은 20년 경력의 토지 전문 부동산 컨설턴트입니다.
 
@@ -184,56 +150,75 @@ class UnifiedAIManager:
 5. 이해하기 쉬운 설명
 
 한국어로 전문적이면서도 친근하게 답변해주세요."""
-
-        full_prompt = f"{system_prompt}\n\n사용자 질문: {user_message}"
         
-        # 프리미엄 요청이고 Claude가 사용 가능하면 Claude 사용
-        if use_premium and self.claude_available:
-            return self._chat_with_claude(full_prompt, system_prompt, user_message)
+        # 복잡한 질문 키워드 (Claude 사용 권장)
+        complex_keywords = ['계약서', '법률', '세금', '소송', '분쟁', '전용', '허가', '규제']
+        is_complex = any(keyword in user_message for keyword in complex_keywords)
         
-        # 기본적으로 Gemini 사용
-        if self.gemini_available:
-            return self._chat_with_gemini(full_prompt)
+        # API 선택 로직
+        if use_premium or is_complex:
+            # Claude 우선 (전문 상담)
+            if self.claude_available:
+                try:
+                    response = self.claude_client.messages.create(
+                        model="claude-3-sonnet-20240229",
+                        max_tokens=1500,
+                        temperature=0.7,
+                        system=system_prompt,
+                        messages=[{"role": "user", "content": user_message}]
+                    )
+                    self.logger.info("Used Claude API for consultation")
+                    return response.content[0].text
+                except Exception as e:
+                    self.logger.error(f"Claude consultation failed: {e}")
+                    # Fallback to Gemini
+                    if self.gemini_available:
+                        return self._gemini_chat(user_message, system_prompt)
+            elif self.gemini_available:
+                return self._gemini_chat(user_message, system_prompt)
+        else:
+            # Gemini 우선 (일반 질문, 비용 절감)
+            if self.gemini_available:
+                try:
+                    response = self._gemini_chat(user_message, system_prompt)
+                    self.logger.info("Used Gemini API for consultation")
+                    return response
+                except Exception as e:
+                    self.logger.error(f"Gemini consultation failed: {e}")
+                    # Fallback to Claude
+                    if self.claude_available:
+                        response = self.claude_client.messages.create(
+                            model="claude-3-sonnet-20240229",
+                            max_tokens=1500,
+                            temperature=0.7,
+                            system=system_prompt,
+                            messages=[{"role": "user", "content": user_message}]
+                        )
+                        return response.content[0].text
+            elif self.claude_available:
+                response = self.claude_client.messages.create(
+                    model="claude-3-sonnet-20240229",
+                    max_tokens=1500,
+                    temperature=0.7,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_message}]
+                )
+                return response.content[0].text
         
-        # Gemini가 없으면 Claude 사용
-        if self.claude_available:
-            return self._chat_with_claude(full_prompt, system_prompt, user_message)
-        
-        # 둘 다 없으면 모의 응답
+        # 모든 API 실패 시 Mock 응답
         return self._get_mock_chat_response(user_message)
     
-    def _chat_with_gemini(self, prompt: str) -> str:
-        """Gemini로 채팅"""
-        try:
-            response = self.gemini_model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            self.logger.error(f"❌ Gemini chat failed: {e}")
-            return "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+    def _gemini_chat(self, user_message: str, system_prompt: str) -> str:
+        """Gemini를 사용한 채팅"""
+        full_prompt = f"{system_prompt}\n\n사용자 질문: {user_message}"
+        response = self.gemini_model.generate_content(full_prompt)
+        return response.text
     
-    def _chat_with_claude(self, full_prompt: str, system_prompt: str, user_message: str) -> str:
-        """Claude로 채팅"""
-        try:
-            response = self.claude_client.messages.create(
-                model="claude-3-sonnet-20240229",
-                max_tokens=1500,
-                temperature=0.7,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_message}]
-            )
-            return response.content[0].text
-        except Exception as e:
-            self.logger.error(f"❌ Claude chat failed: {e}")
-            return "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
-    
-    def analyze_contract(self, contract_text: str, use_premium: bool = False) -> Dict:
-        """
-        계약서 분석
+    def analyze_contract(self, contract_text: str) -> Dict:
+        """계약서 분석"""
+        if not self.client:
+            return self._get_mock_contract_analysis()
         
-        Args:
-            contract_text: 계약서 내용
-            use_premium: True면 Claude 사용 (더 정확)
-        """
         prompt = f"""다음 부동산 계약서를 분석하여 주요 조항과 리스크를 식별해주세요:
 
 계약서 내용:
@@ -246,49 +231,29 @@ class UnifiedAIManager:
 4. 종합 의견
 
 JSON 형식으로 답변해주세요."""
-
-        # 프리미엄 요청이고 Claude가 사용 가능하면 Claude 사용
-        if use_premium and self.claude_available:
-            return self._analyze_contract_with_claude(prompt)
         
-        # 기본적으로 Gemini 사용
-        if self.gemini_available:
-            return self._analyze_contract_with_gemini(prompt)
-        
-        # Gemini가 없으면 Claude 사용
-        if self.claude_available:
-            return self._analyze_contract_with_claude(prompt)
-        
-        # 둘 다 없으면 모의 응답
-        return self._get_mock_contract_analysis()
-    
-    def _analyze_contract_with_gemini(self, prompt: str) -> Dict:
-        """Gemini로 계약서 분석"""
         try:
-            response = self.gemini_model.generate_content(prompt)
-            try:
-                return json.loads(response.text)
-            except json.JSONDecodeError:
-                return self._structure_contract_response(response.text)
-        except Exception as e:
-            self.logger.error(f"❌ Gemini contract analysis failed: {e}")
-            return self._get_mock_contract_analysis()
-    
-    def _analyze_contract_with_claude(self, prompt: str) -> Dict:
-        """Claude로 계약서 분석"""
-        try:
-            response = self.claude_client.messages.create(
+            response = self.client.messages.create(
                 model="claude-3-sonnet-20240229",
                 max_tokens=2000,
                 temperature=0.3,
-                messages=[{"role": "user", "content": prompt}]
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
             )
+            
+            # JSON 파싱 시도
             try:
                 return json.loads(response.content[0].text)
             except json.JSONDecodeError:
+                # JSON 파싱 실패 시 텍스트 응답을 구조화
                 return self._structure_contract_response(response.content[0].text)
+                
         except Exception as e:
-            self.logger.error(f"❌ Claude contract analysis failed: {e}")
+            self.logger.error(f"Contract analysis failed: {e}")
             return self._get_mock_contract_analysis()
     
     def _create_analysis_prompt(self, land_data: Dict, market_data: Dict = None) -> str:
@@ -318,23 +283,16 @@ JSON 형식으로 구조화된 분석 결과를 제공해주세요."""
     def _parse_ai_response(self, response: str) -> Dict:
         """AI 응답 파싱"""
         try:
-            # JSON 추출 시도
-            json_start = response.find('{')
-            json_end = response.rfind('}') + 1
-            if json_start >= 0 and json_end > json_start:
-                json_str = response[json_start:json_end]
-                return json.loads(json_str)
-        except:
-            pass
-        
-        # JSON 파싱 실패 시 기본 구조 반환
-        return {
-            "개발가능성": {"점수": 75, "등급": "B"},
-            "리스크": ["현장 확인 필요"],
-            "예상가격": {"최소": 0, "최대": 0},
-            "추천도": "보통",
-            "ai_response": response
-        }
+            return json.loads(response)
+        except json.JSONDecodeError:
+            # JSON 파싱 실패 시 기본 구조 반환
+            return {
+                "개발가능성": {"점수": 75, "등급": "B"},
+                "리스크": ["현장 확인 필요"],
+                "예상가격": {"최소": 0, "최대": 0},
+                "추천도": "보통",
+                "ai_response": response
+            }
     
     def _structure_contract_response(self, response: str) -> Dict:
         """계약서 응답 구조화"""
@@ -402,20 +360,6 @@ JSON 형식으로 구조화된 분석 결과를 제공해주세요."""
             ],
             "종합의견": "전반적으로 표준적인 계약서이나, 토지 특성상 개발 관련 조건을 더 명확히 할 필요가 있습니다."
         }
-    
-    def get_provider_info(self) -> Dict:
-        """현재 AI 프로바이더 정보"""
-        return {
-            "active_provider": self.active_provider,
-            "gemini_available": self.gemini_available,
-            "claude_available": self.claude_available,
-            "prefer_gemini": self.prefer_gemini
-        }
-
-
-# 하위 호환성을 위한 별칭
-ClaudeAIManager = UnifiedAIManager
-AIManager = UnifiedAIManager
 
 
 class LandPricePredictor:
@@ -472,6 +416,44 @@ class LandPricePredictor:
         
         return np.array(features).reshape(1, -1)
     
+    def train_model(self, training_data: List[Dict]):
+        """모델 훈련"""
+        if not SKLEARN_AVAILABLE or not training_data:
+            self.logger.warning("Cannot train model - insufficient data or libraries")
+            return
+        
+        X = []
+        y = []
+        
+        for data in training_data:
+            features = self.prepare_features(data['land_info']).flatten()
+            X.append(features)
+            y.append(data['actual_price'])
+        
+        X = np.array(X)
+        y = np.array(y)
+        
+        # 데이터 분할
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        
+        # 특성 스케일링
+        X_train_scaled = self.scaler.fit_transform(X_train)
+        X_test_scaled = self.scaler.transform(X_test)
+        
+        # 모델 훈련
+        self.model.fit(X_train_scaled, y_train)
+        
+        # 성능 평가
+        y_pred = self.model.predict(X_test_scaled)
+        mae = mean_absolute_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+        
+        self.logger.info(f"Model trained - MAE: {mae:.2f}, R2: {r2:.3f}")
+        self.is_trained = True
+        
+        # 모델 저장
+        self.save_model()
+    
     def predict_price(self, land_data: Dict, market_data: Dict = None) -> PredictionResult:
         """가격 예측"""
         if not self.is_trained or not SKLEARN_AVAILABLE:
@@ -483,7 +465,7 @@ class LandPricePredictor:
         # 예측
         predicted_price = self.model.predict(features_scaled)[0]
         
-        # 신뢰도 계산
+        # 신뢰도 계산 (특성 중요도 기반)
         confidence = min(0.95, max(0.6, self._calculate_confidence(land_data)))
         
         # 가격 범위 계산
@@ -501,12 +483,12 @@ class LandPricePredictor:
         )
     
     def _simple_price_prediction(self, land_data: Dict) -> PredictionResult:
-        """간단한 가격 예측"""
+        """간단한 가격 예측 (모델 없을 때)"""
         official_price = land_data.get('official_price', 0)
         area = land_data.get('area', 0)
         
         # 공시지가 기반 추정
-        multiplier = 2.0
+        multiplier = 2.0  # 기본 배율
         
         # 용도지역별 조정
         zone_multipliers = {
@@ -531,7 +513,7 @@ class LandPricePredictor:
         elif station_km <= 2.0:
             multiplier *= 1.1
         
-        predicted_price = official_price * area * multiplier
+        predicted_price = official_price * multiplier
         
         return PredictionResult(
             predicted_price=predicted_price,
@@ -548,10 +530,13 @@ class LandPricePredictor:
     
     def _calculate_confidence(self, land_data: Dict) -> float:
         """신뢰도 계산"""
-        confidence = 0.8
+        confidence = 0.8  # 기본 신뢰도
+        
+        # 데이터 완성도에 따른 조정
         required_fields = ['address', 'area', 'official_price', 'zone_type']
         completeness = sum(1 for field in required_fields if land_data.get(field)) / len(required_fields)
         confidence *= completeness
+        
         return confidence
     
     def _get_prediction_factors(self, land_data: Dict) -> List[str]:
@@ -574,3 +559,28 @@ class LandPricePredictor:
             factors.append("주거지역 - 안정적 수요")
         
         return factors
+    
+    def save_model(self, filepath: str = "land_price_model.pkl"):
+        """모델 저장"""
+        if SKLEARN_AVAILABLE and self.is_trained:
+            try:
+                joblib.dump({
+                    'model': self.model,
+                    'scaler': self.scaler,
+                    'version': '1.0'
+                }, filepath)
+                self.logger.info(f"Model saved to {filepath}")
+            except Exception as e:
+                self.logger.error(f"Failed to save model: {e}")
+    
+    def load_model(self, filepath: str = "land_price_model.pkl"):
+        """모델 로드"""
+        if SKLEARN_AVAILABLE:
+            try:
+                data = joblib.load(filepath)
+                self.model = data['model']
+                self.scaler = data['scaler']
+                self.is_trained = True
+                self.logger.info(f"Model loaded from {filepath}")
+            except Exception as e:
+                self.logger.error(f"Failed to load model: {e}")

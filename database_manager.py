@@ -48,20 +48,31 @@ class DatabaseManager:
     
     def __init__(self, db_path: str = "land_ai.db"):
         self.db_path = db_path
-        self.init_database()
         self.setup_logging()
+        self.init_database()
     
     def setup_logging(self):
         """로깅 설정"""
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler('database.log'),
-                logging.StreamHandler()
-            ]
-        )
         self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+        
+        # 핸들러가 이미 있으면 추가하지 않음
+        if not self.logger.handlers:
+            # 파일 핸들러
+            try:
+                file_handler = logging.FileHandler('database.log')
+                file_handler.setLevel(logging.INFO)
+                formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                file_handler.setFormatter(formatter)
+                self.logger.addHandler(file_handler)
+            except Exception:
+                pass  # 파일 핸들러 생성 실패 시 무시
+            
+            # 콘솔 핸들러
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.INFO)
+            console_handler.setFormatter(formatter)
+            self.logger.addHandler(console_handler)
     
     def init_database(self):
         """데이터베이스 초기화"""
