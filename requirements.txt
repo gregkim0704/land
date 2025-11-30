@@ -1,31 +1,68 @@
-# 토지전문 AI 시스템 - Python Dependencies
+# 토지전문 AI 시스템 - 상업용 버전 Dependencies
 
 # 웹 프레임워크
 streamlit>=1.28.0
 
-# 데이터 분석
+# 데이터 분석 및 처리
 pandas>=2.0.0
 numpy>=1.24.0
 
-# AI/ML
-anthropic>=0.7.0  # Claude API (실제 운영 시 필요)
+# AI/ML 라이브러리
+anthropic>=0.7.0  # Claude API
+scikit-learn>=1.3.0  # 머신러닝
+joblib>=1.3.0  # 모델 저장/로드
 
 # 데이터 시각화
 plotly>=5.17.0
 matplotlib>=3.7.0
+seaborn>=0.12.0
 
-# 유틸리티
-python-dateutil>=2.8.2
-pytz
+# 데이터베이스
+sqlite3  # 내장 모듈
 
-# PDF 생성 (추후 리포트 생성용)
+# 보안 및 암호화
+cryptography>=41.0.0
+PyJWT>=2.8.0
+bcrypt>=4.0.0
+
+# 입력 검증
+validators>=0.22.0
+
+# HTTP 요청 및 API
+requests>=2.31.0
+urllib3>=2.0.0
+
+# PDF 생성
 reportlab>=4.0.0
 
 # 엑셀 처리
 openpyxl>=3.1.0
+xlsxwriter>=3.1.0
 
-# HTTP 요청 (공공 API 호출용)
-requests>=2.31.0
+# 날짜/시간 처리
+python-dateutil>=2.8.2
+pytz>=2023.3
 
 # 환경 변수 관리
 python-dotenv>=1.0.0
+
+# 로깅 및 모니터링
+structlog>=23.1.0
+
+# 이미지 처리 (향후 지적도 분석용)
+Pillow>=10.0.0
+
+# 텍스트 처리
+regex>=2023.8.8
+
+# 성능 최적화
+cachetools>=5.3.0
+
+# 개발 도구 (선택사항)
+pytest>=7.4.0
+black>=23.7.0
+flake8>=6.0.0
+
+# 배포 도구 (선택사항)
+gunicorn>=21.2.0  # 프로덕션 서버
+uvicorn>=0.23.0  # ASGI 서버

@@ -1,0 +1,171 @@
+# 토지 AI 시스템 - Git 제외 파일
+
+# 환경 변수 및 보안 파일
+.env
+.env.local
+.env.production
+*.key
+*.pem
+config/secrets.json
+
+# 데이터베이스 파일
+*.db
+*.sqlite
+*.sqlite3
+data/
+backups/
+
+# 로그 파일
+logs/
+*.log
+security.log
+errors.log
+database.log
+
+# Python 관련
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 가상환경
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDE 관련
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# 임시 파일
+*.tmp
+*.temp
+temp/
+tmp/
+
+# 사용자 업로드 파일
+uploads/
+user_data/
+
+# 캐시 파일
+.cache/
+*.cache
+
+# 백업 파일
+*.bak
+*.backup
+
+# 시스템 파일
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 테스트 관련
+.coverage
+.pytest_cache/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# 문서 빌드
+docs/_build/
+
+# 배포 관련
+*.tar.gz
+*.zip
+release/
+
+# 모델 파일 (용량이 큰 경우)
+*.pkl
+*.joblib
+models/trained/
+
+# 데이터 파일
+*.csv
+*.xlsx
+*.json
+raw_data/
+processed_data/
+
+# 설정 파일 (민감한 정보 포함)
+config/production.yaml
+config/local.yaml
